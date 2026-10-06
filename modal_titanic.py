@@ -1,24 +1,18 @@
 """
 Modal Deployment – Titanic Survival Prediction App
 ===================================================
-Deploys the Titanic Streamlit app as a persistent
-web endpoint on Modal's serverless infrastructure.
-
-Usage:
-  modal deploy modal_titanic.py        # deploy permanently
-  modal serve  modal_titanic.py        # ephemeral (dev mode)
-
-After deploying, Modal gives you a public HTTPS URL like:
-  https://ummad-mk--titanic-predictor-run.modal.run
+modal deploy modal_titanic.py        # permanent
+modal serve  modal_titanic.py        # ephemeral dev
 """
 
 import modal
 from pathlib import Path
 
-# ── App definition ────────────────────────────────────────────────
 app = modal.App("titanic-predictor")
 
-# ── Container image ───────────────────────────────────────────────
+LOCAL_DIR = Path(__file__).parent
+
+# ── Build image: install deps AND bake app files in at build time ─
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
@@ -33,45 +27,26 @@ image = (
         "threadpoolctl==3.5.0",
         "narwhals>=2.0.1",
     )
-    .env({"PYTHONUNBUFFERED": "1"})
-)
-
-# ── Mount only what the app needs ─────────────────────────────────
-LOCAL_DIR = Path(__file__).parent
-project_mount = modal.Mount.from_local_dir(
-    LOCAL_DIR,
-    remote_path="/app",
-    condition=lambda p: any(
-        p.endswith(ext)
-        for ext in [
-            "titanic_app.py",
-            "titanic_svc_model.pkl",
-            "titanic.csv",
-        ]
-    ),
+    .add_local_file(str(LOCAL_DIR / "titanic_app.py"),        "/app/titanic_app.py")
+    .add_local_file(str(LOCAL_DIR / "titanic_svc_model.pkl"), "/app/titanic_svc_model.pkl")
+    .add_local_file(str(LOCAL_DIR / "titanic.csv"),           "/app/titanic.csv")
 )
 
 # ── Web endpoint ──────────────────────────────────────────────────
 @app.function(
     image=image,
-    mounts=[project_mount],
-    allow_concurrent_inputs=10,
-    min_containers=1,
     timeout=300,
 )
+@modal.concurrent(max_inputs=10)
 @modal.web_server(port=8501, startup_timeout=60)
 def run():
-    import subprocess
-    import sys
-
-    subprocess.Popen(
-        [
-            sys.executable, "-m", "streamlit", "run",
-            "/app/titanic_app.py",
-            "--server.port", "8501",
-            "--server.address", "0.0.0.0",
-            "--server.headless", "true",
-            "--server.enableCORS", "false",
-            "--server.enableXsrfProtection", "false",
-        ]
-    )
+    import subprocess, sys
+    subprocess.Popen([
+        sys.executable, "-m", "streamlit", "run",
+        "/app/titanic_app.py",
+        "--server.port",               "8501",
+        "--server.address",            "0.0.0.0",
+        "--server.headless",           "true",
+        "--server.enableCORS",         "false",
+        "--server.enableXsrfProtection", "false",
+    ])

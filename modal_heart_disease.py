@@ -1,24 +1,18 @@
 """
 Modal Deployment – Heart Disease Prediction App
 ================================================
-Deploys the Heart Disease Streamlit app as a persistent
-web endpoint on Modal's serverless infrastructure.
-
-Usage:
-  modal deploy modal_heart_disease.py        # deploy permanently
-  modal serve  modal_heart_disease.py        # ephemeral (dev mode)
-
-After deploying, Modal gives you a public HTTPS URL like:
-  https://ummad-mk--heart-disease-predictor-run.modal.run
+modal deploy modal_heart_disease.py        # permanent
+modal serve  modal_heart_disease.py        # ephemeral dev
 """
 
 import modal
 from pathlib import Path
 
-# ── App definition ────────────────────────────────────────────────
 app = modal.App("heart-disease-predictor")
 
-# ── Container image with all dependencies ─────────────────────────
+LOCAL_DIR = Path(__file__).parent
+
+# ── Build image: install deps AND bake app files in at build time ─
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
@@ -33,48 +27,28 @@ image = (
         "threadpoolctl==3.5.0",
         "narwhals>=2.0.1",
     )
-    .env({"PYTHONUNBUFFERED": "1"})
-)
-
-# ── Mount local project files into the container ──────────────────
-LOCAL_DIR = Path(__file__).parent
-project_mount = modal.Mount.from_local_dir(
-    LOCAL_DIR,
-    remote_path="/app",
-    # Only copy what the app actually needs
-    condition=lambda p: any(
-        p.endswith(ext)
-        for ext in [
-            "heart_disease_app.py",
-            "heart_disease_svc_model.pkl",
-            "heart_disease_le_cp.pkl",
-            "heart.csv",
-        ]
-    ),
+    # Copy each required file directly into the container image
+    .add_local_file(str(LOCAL_DIR / "heart_disease_app.py"),        "/app/heart_disease_app.py")
+    .add_local_file(str(LOCAL_DIR / "heart_disease_svc_model.pkl"), "/app/heart_disease_svc_model.pkl")
+    .add_local_file(str(LOCAL_DIR / "heart_disease_le_cp.pkl"),     "/app/heart_disease_le_cp.pkl")
+    .add_local_file(str(LOCAL_DIR / "heart.csv"),                   "/app/heart.csv")
 )
 
 # ── Web endpoint ──────────────────────────────────────────────────
 @app.function(
     image=image,
-    mounts=[project_mount],
-    allow_concurrent_inputs=10,
-    # Keep one container warm to avoid cold starts
-    min_containers=1,
     timeout=300,
 )
+@modal.concurrent(max_inputs=10)
 @modal.web_server(port=8501, startup_timeout=60)
 def run():
-    import subprocess
-    import sys
-
-    subprocess.Popen(
-        [
-            sys.executable, "-m", "streamlit", "run",
-            "/app/heart_disease_app.py",
-            "--server.port", "8501",
-            "--server.address", "0.0.0.0",
-            "--server.headless", "true",
-            "--server.enableCORS", "false",
-            "--server.enableXsrfProtection", "false",
-        ]
-    )
+    import subprocess, sys
+    subprocess.Popen([
+        sys.executable, "-m", "streamlit", "run",
+        "/app/heart_disease_app.py",
+        "--server.port",               "8501",
+        "--server.address",            "0.0.0.0",
+        "--server.headless",           "true",
+        "--server.enableCORS",         "false",
+        "--server.enableXsrfProtection", "false",
+    ])
