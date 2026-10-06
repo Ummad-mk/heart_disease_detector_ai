@@ -1,0 +1,15 @@
+# Core ML
+scikit-learn==1.9.1
+numpy==2.5.3
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0
+narwhals==2.26.0
+
+# Data & Visualisation
+pandas==3.0.6
+seaborn==0.13.2
+matplotlib==3.11.2
+
+# Web app
+streamlit==1.45.1
