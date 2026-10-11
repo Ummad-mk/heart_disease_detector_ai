@@ -20,8 +20,9 @@ echo   4. Launch Titanic Streamlit app
 echo   5. Launch Heart Disease Streamlit app
 echo   6. Run tests
 echo   7. Execute Notebooks
+echo   8. Generate PDF Reports from Notebooks
 echo.
-set /p choice="  Choose an option [1-7]: "
+set /p choice="  Choose an option [1-8]: "
 
 if "%choice%"=="1" goto train_all
 if "%choice%"=="2" goto train_titanic
@@ -30,6 +31,7 @@ if "%choice%"=="4" goto app_titanic
 if "%choice%"=="5" goto app_heart
 if "%choice%"=="6" goto run_tests
 if "%choice%"=="7" goto notebooks
+if "%choice%"=="8" goto pdf_reports
 echo Invalid option. Exiting.
 goto end
 
@@ -79,6 +81,14 @@ echo Executing notebooks ...
 jupyter nbconvert --to notebook --execute --inplace notebooks\01_titanic_survival_prediction.ipynb
 jupyter nbconvert --to notebook --execute --inplace notebooks\02_heart_disease_prediction.ipynb
 echo Notebooks executed.
+goto end
+
+:pdf_reports
+echo.
+echo Generating PDF reports from notebooks ...
+python scripts\generate_pdf_reports.py || goto error
+echo.
+echo PDF reports generated successfully in outputs\reports\
 goto end
 
 :error
